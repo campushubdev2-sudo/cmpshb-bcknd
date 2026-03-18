@@ -3,7 +3,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 
-import { CLIENT_URL, NODE_ENV, PORT } from "./config/env.js";
+import { CORS_ORIGINS, NODE_ENV, PORT } from "./config/env.js";
 import { disconnectFromDatabase, connectToDatabase } from "./database/mongodb.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 import { formatUptime } from "./utils/time.js";
@@ -36,8 +36,22 @@ if (isDev) {
   app.use(requestLogger);
 }
 
+const allowedOrigins = CORS_ORIGINS.split(", ")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 // MIDDLEWARES
-app.use(cors({ origin: CLIENT_URL, credentials: true }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  }),
+);
 app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));

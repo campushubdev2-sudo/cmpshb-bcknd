@@ -16,7 +16,7 @@ const requireEnv = (key, value) => {
   return value;
 };
 
-export const CLIENT_URL = requireEnv("CLIENT_URL", process.env.CLIENT_URL);
+export const CORS_ORIGINS = requireEnv("CORS_ORIGINS", process.env.CORS_ORIGINS);
 export const EMAIL_PASSWORD = requireEnv("EMAIL_PASSWORD", process.env.EMAIL_PASSWORD);
 export const EMAIL_SERVICE = requireEnv("EMAIL_SERVICE", process.env.EMAIL_SERVICE);
 export const EMAIL_USER = requireEnv("EMAIL_USER", process.env.EMAIL_USER);
