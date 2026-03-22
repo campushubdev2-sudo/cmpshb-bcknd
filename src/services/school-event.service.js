@@ -18,13 +18,30 @@ class SchoolEventService {
       throw new AppError(message, 400);
     }
 
-    const { title, description, date, venue, organizedBy } = value;
+    const { title, objective, startDate, endDate, startTime, endTime, venue, organizedBy, allDay } = value;
 
-    if (new Date(date) < new Date()) {
+    const now = new Date();
+    if (new Date(startDate) < now) {
       throw new AppError("Event date cannot be in the past", 400);
     }
 
-    const event = await SchoolEventRepository.create({ title, description, date, venue, organizedBy });
+    if (!allDay && startDate === endDate && startTime && endTime) {
+      if (endTime < startTime) {
+        throw new AppError("End time cannot be earlier than start time", 400);
+      }
+    }
+
+    const event = await SchoolEventRepository.create({
+      title,
+      objective,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+      venue,
+      organizedBy,
+      allDay,
+    });
 
     await AuditLogRepository.create({
       userId: actorId,
@@ -215,7 +232,7 @@ class SchoolEventService {
     const { restrictFields = true, allowPastDates = true } = options;
 
     if (restrictFields) {
-      const allowedUpdates = ["title", "description", "date", "venue"];
+      const allowedUpdates = ["title", "objective", "startDate", "endDate", "startTime", "endTime", "venue", "organizedBy", "allDay"];
       const payloadKeys = Object.keys(payload);
 
       const invalidFields = payloadKeys.filter((key) => !allowedUpdates.includes(key));
@@ -224,9 +241,8 @@ class SchoolEventService {
         throw new AppError(`The following fields cannot be updated: ${invalidFields.join(", ")}`, 400);
       }
 
-      const hasAllowedField = payloadKeys.some((key) => allowedUpdates.includes(key));
-      if (!hasAllowedField) {
-        throw new AppError("At least one valid field must be provided for update", 400);
+      if (payloadKeys.length === 0) {
+        throw new AppError("At least one field must be provided for update", 400);
       }
     }
 
@@ -242,13 +258,33 @@ class SchoolEventService {
       throw new AppError("School event not found", 404);
     }
 
-    // Check if date is being updated and validate it's not in the past
-    if (value.date && !allowPastDates) {
-      const currentDate = new Date();
-      const eventDate = new Date(value.date);
+    const merged = {
+      title: value.title ?? existingEvent.title,
+      objective: value.objective ?? existingEvent.objective,
+      startDate: value.startDate ?? existingEvent.startDate,
+      endDate: value.endDate ?? existingEvent.endDate,
+      startTime: value.startTime ?? existingEvent.startTime,
+      endTime: value.endTime ?? existingEvent.endTime,
+      venue: value.venue ?? existingEvent.venue,
+      organizedBy: value.organizedBy ?? existingEvent.organizedBy,
+      allDay: value.allDay ?? existingEvent.allDay,
+    };
 
-      if (eventDate < currentDate) {
-        throw new AppError("Cannot update event to a past date", 400);
+    const now = new Date();
+
+    if (!allowPastDates) {
+      if (new Date(merged.startDate) < now) {
+        throw new AppError("Event start date cannot be in the past", 400);
+      }
+    }
+
+    if (new Date(merged.endDate) < new Date(merged.startDate)) {
+      throw new AppError("End date cannot be earlier than start date", 400);
+    }
+
+    if (!merged.allDay && merged.startDate === merged.endDate) {
+      if (merged.startTime && merged.endTime && merged.endTime < merged.startTime) {
+        throw new AppError("End time cannot be earlier than start time", 400);
       }
     }
 
