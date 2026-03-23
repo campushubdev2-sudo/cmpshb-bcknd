@@ -2,7 +2,17 @@
 import AppError from "../middlewares/error.middleware.js";
 import AuditLogRepository from "../repositories/audit-log.repositories.js";
 import { buildFilterFromQuery } from "../utils/build-filter.js";
-import { filteredUpdateSchema, deleteSchoolEventSchema, updateEventSchema, getRecentlyCreatedEventsSchema, getMonthlyStatsSchema, filterEventsSchema, createSchoolEventSchema, getAllSchoolEventsSchema, getSchoolEventByIdSchema } from "../validators/school-event.validator.js";
+import {
+  filteredUpdateSchema,
+  deleteSchoolEventSchema,
+  updateEventSchema,
+  getRecentlyCreatedEventsSchema,
+  getMonthlyStatsSchema,
+  filterEventsSchema,
+  createSchoolEventSchema,
+  getAllSchoolEventsSchema,
+  getSchoolEventByIdSchema,
+} from "../validators/school-event.validator.js";
 import mongoose from "mongoose";
 import SchoolEventRepository from "../repositories/school-event.repositories.js";
 
@@ -18,7 +28,8 @@ class SchoolEventService {
       throw new AppError(message, 400);
     }
 
-    const { title, objective, startDate, endDate, startTime, endTime, venue, organizedBy, allDay } = value;
+    const { title, objective, startDate, endDate, startTime, endTime, venue, organizedBy, allDay } =
+      value;
 
     const now = new Date();
     if (new Date(startDate) < now) {
@@ -232,13 +243,27 @@ class SchoolEventService {
     const { restrictFields = true, allowPastDates = true } = options;
 
     if (restrictFields) {
-      const allowedUpdates = ["title", "objective", "startDate", "endDate", "startTime", "endTime", "venue", "organizedBy", "allDay"];
+      const allowedUpdates = [
+        "title",
+        "objective",
+        "startDate",
+        "endDate",
+        "startTime",
+        "endTime",
+        "venue",
+        "organizedBy",
+        "allDay",
+      ];
+
       const payloadKeys = Object.keys(payload);
 
       const invalidFields = payloadKeys.filter((key) => !allowedUpdates.includes(key));
 
       if (invalidFields.length > 0) {
-        throw new AppError(`The following fields cannot be updated: ${invalidFields.join(", ")}`, 400);
+        throw new AppError(
+          `The following fields cannot be updated: ${invalidFields.join(", ")}`,
+          400,
+        );
       }
 
       if (payloadKeys.length === 0) {
@@ -246,7 +271,9 @@ class SchoolEventService {
       }
     }
 
-    const { error, value } = restrictFields ? filteredUpdateSchema.validate(payload) : updateEventSchema.validate(payload);
+    const { error, value } = restrictFields
+      ? filteredUpdateSchema.validate(payload)
+      : updateEventSchema.validate(payload);
 
     if (error) {
       const message = error.details[0].message.replace(/"/g, "");
@@ -270,21 +297,43 @@ class SchoolEventService {
       allDay: value.allDay ?? existingEvent.allDay,
     };
 
-    const now = new Date();
+    // Normalize dates (remove time component)
+    const startDate = new Date(merged.startDate);
+    const endDate = new Date(merged.endDate);
 
-    if (!allowPastDates) {
-      if (new Date(merged.startDate) < now) {
-        throw new AppError("Event start date cannot be in the past", 400);
-      }
+    const startDay = new Date(startDate.setHours(0, 0, 0, 0));
+    const endDay = new Date(endDate.setHours(0, 0, 0, 0));
+    const today = new Date(new Date().setHours(0, 0, 0, 0));
+
+    /**
+     * 1. Prevent past dates
+     */
+    if (!allowPastDates && startDay < today) {
+      throw new AppError("Event start date cannot be in the past", 400);
     }
 
-    if (new Date(merged.endDate) < new Date(merged.startDate)) {
+    /**
+     * 2. End date must not be before start date
+     */
+    if (endDay < startDay) {
       throw new AppError("End date cannot be earlier than start date", 400);
     }
 
-    if (!merged.allDay && merged.startDate === merged.endDate) {
-      if (merged.startTime && merged.endTime && merged.endTime < merged.startTime) {
-        throw new AppError("End time cannot be earlier than start time", 400);
+    /**
+     * 3. Time validation for non-all-day events
+     */
+    if (!merged.allDay) {
+      if (!merged.startTime || !merged.endTime) {
+        throw new AppError("Start time and end time are required for non-all-day events", 400);
+      }
+
+      /**
+       * Only compare time if same day
+       */
+      if (startDay.getTime() === endDay.getTime()) {
+        if (merged.endTime <= merged.startTime) {
+          throw new AppError("End time must be later than start time", 400);
+        }
       }
     }
 
