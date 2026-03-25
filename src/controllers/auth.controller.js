@@ -35,7 +35,7 @@ class AuthController {
     response.status(200).json({
       success: true,
       message: "Login Successfully!",
-      data: { user },
+      data: { user, token },
     });
   });
 
